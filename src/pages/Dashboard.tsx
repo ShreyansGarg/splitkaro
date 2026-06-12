@@ -50,6 +50,12 @@ export default function Dashboard() {
         <div className="mx-auto flex max-w-lg items-center justify-between">
           <h1 className="text-xl font-bold text-primary-600">SplitKaro</h1>
           <div className="flex items-center gap-3">
+            <Link
+              to="/summary"
+              className="rounded-lg bg-primary-50 px-3 py-1.5 text-sm font-medium text-primary-600 hover:bg-primary-100"
+            >
+              Summary
+            </Link>
             {user?.photoURL && (
               <img
                 src={user.photoURL}

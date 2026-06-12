@@ -6,6 +6,7 @@ import GroupDetail from '@/pages/GroupDetail';
 import AddExpense from '@/pages/AddExpense';
 import ItemizedBill from '@/pages/ItemizedBill';
 import SettleUp from '@/pages/SettleUp';
+import Summary from '@/pages/Summary';
 import type { ReactNode } from 'react';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -35,6 +36,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/summary"
+        element={
+          <ProtectedRoute>
+            <Summary />
           </ProtectedRoute>
         }
       />
