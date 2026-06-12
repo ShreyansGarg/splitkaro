@@ -1,0 +1,108 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId
+        && request.resource.data.uid == userId
+        && request.resource.data.email == request.auth.token.email;
+      allow update: if request.auth != null && request.auth.uid == userId
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email;
+    }
+
+    // Groups
+    match /groups/{groupId} {
+      allow read: if request.auth != null
+        && request.auth.uid in resource.data.memberIds;
+
+      allow create: if request.auth != null
+        && request.resource.data.memberIds == [request.auth.uid]
+        && request.resource.data.adminIds == [request.auth.uid]
+        && request.resource.data.createdBy == request.auth.uid;
+
+      // Admin update: can modify settings but not memberIds
+      allow update: if request.auth != null
+        && request.auth.uid in resource.data.adminIds
+        && request.resource.data.createdBy == resource.data.createdBy
+        && resource.data.createdBy in request.resource.data.adminIds
+        && request.resource.data.memberIds == resource.data.memberIds;
+
+      // Leave group (non-creator only)
+      allow update: if request.auth != null
+        && request.auth.uid in resource.data.memberIds
+        && request.auth.uid != resource.data.createdBy
+        && request.resource.data.memberIds.hasAll(
+             resource.data.memberIds.removeAll([request.auth.uid]))
+        && request.resource.data.memberIds.size() == resource.data.memberIds.size() - 1
+        && request.resource.data.adminIds == resource.data.adminIds
+        && request.resource.data.name == resource.data.name
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.pendingEmails == resource.data.pendingEmails;
+
+      // Balances subcollection — read-only for clients
+      match /balances/{balanceId} {
+        allow read: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.memberIds;
+        allow write: if false;
+      }
+    }
+
+    // Expenses
+    match /expenses/{expenseId} {
+      allow read: if request.auth != null
+        && request.auth.uid in get(/databases/$(database)/documents/groups/$(resource.data.groupId)).data.memberIds;
+
+      allow create: if request.auth != null
+        && request.resource.data.amount > 0
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.paidBy in get(/databases/$(database)/documents/groups/$(request.resource.data.groupId)).data.memberIds
+        && request.auth.uid in get(/databases/$(database)/documents/groups/$(request.resource.data.groupId)).data.memberIds;
+
+      allow update: if request.auth != null
+        && request.resource.data.amount > 0
+        && request.resource.data.groupId == resource.data.groupId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.paidBy == resource.data.paidBy
+        && request.auth.uid in get(/databases/$(database)/documents/groups/$(resource.data.groupId)).data.memberIds
+        && (resource.data.createdBy == request.auth.uid
+            || request.auth.uid in get(/databases/$(database)/documents/groups/$(resource.data.groupId)).data.adminIds);
+
+      allow delete: if request.auth != null
+        && request.auth.uid in get(/databases/$(database)/documents/groups/$(resource.data.groupId)).data.memberIds
+        && (resource.data.createdBy == request.auth.uid
+            || request.auth.uid in get(/databases/$(database)/documents/groups/$(resource.data.groupId)).data.adminIds);
+
+      // Items subcollection
+      match /items/{itemId} {
+        allow read: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/groups/$(get(/databases/$(database)/documents/expenses/$(expenseId)).data.groupId)).data.memberIds;
+        allow write: if request.auth != null
+          && request.auth.uid == get(/databases/$(database)/documents/expenses/$(expenseId)).data.createdBy;
+      }
+    }
+
+    // Settlements
+    match /settlements/{settlementId} {
+      allow read: if request.auth != null
+        && (request.auth.uid == resource.data.fromUserId
+            || request.auth.uid == resource.data.toUserId);
+
+      allow create: if request.auth != null
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.fromUserId == request.auth.uid
+        && request.resource.data.amount > 0
+        && request.auth.uid in get(/databases/$(database)/documents/groups/$(request.resource.data.groupId)).data.memberIds;
+
+      allow update, delete: if false;
+    }
+
+    // Processed events — only Cloud Functions (admin SDK)
+    match /processedEvents/{eventId} {
+      allow read, write: if false;
+    }
+  }
+}
