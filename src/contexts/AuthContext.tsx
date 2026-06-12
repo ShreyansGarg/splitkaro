@@ -6,7 +6,19 @@ import {
   GoogleAuthProvider,
   type User as FirebaseUser,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import {
+  doc,
+  getDoc,
+  setDoc,
+  getDocs,
+  collection,
+  query,
+  where,
+  updateDoc,
+  arrayUnion,
+  arrayRemove,
+  serverTimestamp,
+} from 'firebase/firestore';
 import { auth, db } from '@/services/firebase';
 
 interface AuthUser {
@@ -43,6 +55,21 @@ async function ensureUserDoc(firebaseUser: FirebaseUser): Promise<AuthUser> {
       ...userData,
       groupIds: [],
       createdAt: serverTimestamp(),
+    });
+  }
+
+  const pendingQuery = query(
+    collection(db, 'groups'),
+    where('pendingEmails', 'array-contains', userData.email)
+  );
+  const pendingGroups = await getDocs(pendingQuery);
+  for (const groupDoc of pendingGroups.docs) {
+    await updateDoc(groupDoc.ref, {
+      memberIds: arrayUnion(firebaseUser.uid),
+      pendingEmails: arrayRemove(userData.email),
+    });
+    await updateDoc(userRef, {
+      groupIds: arrayUnion(groupDoc.id),
     });
   }
 
