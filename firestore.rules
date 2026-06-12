@@ -23,7 +23,8 @@ service cloud.firestore {
     // Groups
     match /groups/{groupId} {
       allow read: if request.auth != null
-        && request.auth.uid in resource.data.memberIds;
+        && (request.auth.uid in resource.data.memberIds
+            || request.auth.token.email in resource.data.pendingEmails);
 
       allow create: if request.auth != null
         && request.resource.data.memberIds == [request.auth.uid]
