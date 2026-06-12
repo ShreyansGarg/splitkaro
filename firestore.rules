@@ -5,13 +5,19 @@ service cloud.firestore {
 
     // Users
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null;
       allow create: if request.auth != null && request.auth.uid == userId
         && request.resource.data.uid == userId
         && request.resource.data.email == request.auth.token.email;
       allow update: if request.auth != null && request.auth.uid == userId
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.email == resource.data.email;
+      // Allow any authenticated user to add to another user's groupIds
+      allow update: if request.auth != null
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.displayName == resource.data.displayName
+        && request.resource.data.groupIds.hasAll(resource.data.groupIds);
     }
 
     // Groups
@@ -24,12 +30,12 @@ service cloud.firestore {
         && request.resource.data.adminIds == [request.auth.uid]
         && request.resource.data.createdBy == request.auth.uid;
 
-      // Admin update: can modify settings but not memberIds
+      // Admin update: can modify settings and add members
       allow update: if request.auth != null
         && request.auth.uid in resource.data.adminIds
         && request.resource.data.createdBy == resource.data.createdBy
         && resource.data.createdBy in request.resource.data.adminIds
-        && request.resource.data.memberIds == resource.data.memberIds;
+        && request.resource.data.memberIds.hasAll(resource.data.memberIds);
 
       // Leave group (non-creator only)
       allow update: if request.auth != null

@@ -8,6 +8,7 @@ import {
   orderBy,
   onSnapshot,
   getDoc,
+  getDocs,
   updateDoc,
   arrayUnion,
   deleteDoc,
@@ -113,9 +114,25 @@ export default function GroupDetail() {
 
     setInviting(true);
     try {
-      await updateDoc(doc(db, 'groups', id), {
-        pendingEmails: arrayUnion(email),
-      });
+      const usersQuery = query(
+        collection(db, 'users'),
+        where('email', '==', email)
+      );
+      const userSnap = await getDocs(usersQuery);
+
+      if (!userSnap.empty) {
+        const existingUser = userSnap.docs[0]!;
+        await updateDoc(doc(db, 'groups', id), {
+          memberIds: arrayUnion(existingUser.id),
+        });
+        await updateDoc(doc(db, 'users', existingUser.id), {
+          groupIds: arrayUnion(id),
+        });
+      } else {
+        await updateDoc(doc(db, 'groups', id), {
+          pendingEmails: arrayUnion(email),
+        });
+      }
       setInviteEmail('');
     } catch (err) {
       console.error('Failed to invite:', err);
