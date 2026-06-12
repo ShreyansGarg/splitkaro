@@ -167,7 +167,7 @@ export default function GroupDetail() {
                       />
                     ) : (
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-sm font-medium text-primary-700">
-                        {(member?.displayName || '?')[0].toUpperCase()}
+                        {(member?.displayName ?? '?')[0]!.toUpperCase()}
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
