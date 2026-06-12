@@ -38,6 +38,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 async function ensureUserDoc(firebaseUser: FirebaseUser): Promise<AuthUser> {
   const userRef = doc(db, 'users', firebaseUser.uid);
