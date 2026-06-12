@@ -18,6 +18,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import type { Group, Expense, Balance, User } from '@/types';
 import { formatCurrency } from '@/utils/splits';
 import { simplifyDebts } from '@/utils/debtSimplification';
+import Comments from '@/components/Comments';
 
 type Tab = 'expenses' | 'balances';
 
@@ -34,6 +35,7 @@ export default function GroupDetail() {
   const [inviting, setInviting] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('expenses');
   const [simplifyEnabled, setSimplifyEnabled] = useState(true);
+  const [expandedExpense, setExpandedExpense] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -50,11 +52,17 @@ export default function GroupDetail() {
       where('groupId', '==', id),
       orderBy('date', 'desc')
     );
-    const unsubExpenses = onSnapshot(expenseQuery, (snap) => {
-      setExpenses(
-        snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Expense)
-      );
-    });
+    const unsubExpenses = onSnapshot(
+      expenseQuery,
+      (snap) => {
+        setExpenses(
+          snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Expense)
+        );
+      },
+      (err) => {
+        console.error('Expenses query error:', err);
+      }
+    );
 
     const unsubBalances = onSnapshot(
       collection(db, `groups/${id}/balances`),
@@ -432,12 +440,18 @@ export default function GroupDetail() {
                 {expenses.map((expense) => {
                   const canDelete =
                     expense.createdBy === user?.uid || isAdmin;
+                  const isExpanded = expandedExpense === expense.id;
                   return (
                     <div
                       key={expense.id}
                       className="rounded-xl bg-white p-4 shadow-sm"
                     >
-                      <div className="flex items-center justify-between">
+                      <div
+                        className="flex cursor-pointer items-center justify-between"
+                        onClick={() =>
+                          setExpandedExpense(isExpanded ? null : expense.id)
+                        }
+                      >
                         <div className="min-w-0 flex-1">
                           <p className="font-medium">{expense.description}</p>
                           <p className="text-xs text-gray-500">
@@ -452,7 +466,8 @@ export default function GroupDetail() {
                           </span>
                           {canDelete && (
                             <button
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 if (
                                   window.confirm(
                                     `Delete "${expense.description}"?`
@@ -478,8 +493,49 @@ export default function GroupDetail() {
                               </svg>
                             </button>
                           )}
+                          <svg
+                            className={`h-4 w-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            strokeWidth={2}
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="m19.5 8.25-7.5 7.5-7.5-7.5"
+                            />
+                          </svg>
                         </div>
                       </div>
+                      {isExpanded && (
+                        <>
+                          <div className="mt-3 border-t pt-3">
+                            <p className="mb-1 text-xs font-medium uppercase text-gray-400">
+                              Split breakdown
+                            </p>
+                            {Object.entries(expense.splits).map(
+                              ([uid, amount]) => (
+                                <div
+                                  key={uid}
+                                  className="flex justify-between py-0.5 text-sm"
+                                >
+                                  <span className="text-gray-600">
+                                    {memberName(uid)}
+                                  </span>
+                                  <span className="text-gray-800">
+                                    {formatCurrency(amount)}
+                                  </span>
+                                </div>
+                              )
+                            )}
+                          </div>
+                          <Comments
+                            expenseId={expense.id}
+                            members={members}
+                          />
+                        </>
+                      )}
                     </div>
                   );
                 })}

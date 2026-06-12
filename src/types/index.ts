@@ -84,6 +84,13 @@ export interface Settlement {
   amount: number;
 }
 
+export interface Comment {
+  id: string;
+  text: string;
+  userId: string;
+  createdAt: Timestamp;
+}
+
 export interface SettlementRecord {
   id: string;
   groupId: string;
