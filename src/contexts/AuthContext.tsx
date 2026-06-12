@@ -82,17 +82,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      try {
-        if (firebaseUser) {
-          const userData = await ensureUserDoc(firebaseUser);
-          setUser(userData);
-        } else {
-          setUser(null);
+      if (firebaseUser) {
+        const userData: AuthUser = {
+          uid: firebaseUser.uid,
+          displayName: firebaseUser.displayName ?? 'Anonymous',
+          email: firebaseUser.email ?? '',
+          photoURL: firebaseUser.photoURL,
+        };
+        setUser(userData);
+        setLoading(false);
+
+        try {
+          await ensureUserDoc(firebaseUser);
+        } catch (err) {
+          console.error('Post-login setup error:', err);
         }
-      } catch (err) {
-        console.error('Auth state error:', err);
+      } else {
         setUser(null);
-      } finally {
         setLoading(false);
       }
     });
