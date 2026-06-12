@@ -106,8 +106,9 @@ export default function Summary() {
         if (!youOwe[s.to]) {
           youOwe[s.to] = { uid: s.to, amount: 0, groups: [] };
         }
-        youOwe[s.to].amount += s.amount;
-        youOwe[s.to].groups.push({
+        const entry = youOwe[s.to]!;
+        entry.amount += s.amount;
+        entry.groups.push({
           groupId: group.id,
           groupName: group.name,
           amount: s.amount,
@@ -116,8 +117,9 @@ export default function Summary() {
         if (!owedToYou[s.from]) {
           owedToYou[s.from] = { uid: s.from, amount: 0, groups: [] };
         }
-        owedToYou[s.from].amount += s.amount;
-        owedToYou[s.from].groups.push({
+        const entry = owedToYou[s.from]!;
+        entry.amount += s.amount;
+        entry.groups.push({
           groupId: group.id,
           groupName: group.name,
           amount: s.amount,
