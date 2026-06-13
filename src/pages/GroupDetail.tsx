@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   doc,
@@ -15,9 +15,10 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/services/firebase';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Group, Expense, Balance, User } from '@/types';
+import type { Group, Expense, SettlementRecord, User } from '@/types';
 import { formatCurrency } from '@/utils/splits';
 import { simplifyDebts } from '@/utils/debtSimplification';
+import { computeBalancesFromExpenses } from '@/utils/computeBalances';
 import Comments from '@/components/Comments';
 
 type Tab = 'expenses' | 'balances';
@@ -27,7 +28,7 @@ export default function GroupDetail() {
   const { user } = useAuth();
   const [group, setGroup] = useState<Group | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [balances, setBalances] = useState<Balance[]>([]);
+  const [settlements, setSettlements] = useState<SettlementRecord[]>([]);
   const [members, setMembers] = useState<Record<string, User>>({});
   const [loading, setLoading] = useState(true);
   const [showMembers, setShowMembers] = useState(false);
@@ -64,17 +65,20 @@ export default function GroupDetail() {
       }
     );
 
-    const unsubBalances = onSnapshot(
-      collection(db, `groups/${id}/balances`),
-      (snap) => {
-        setBalances(snap.docs.map((d) => d.data() as Balance));
-      }
+    const settlementQuery = query(
+      collection(db, 'settlements'),
+      where('groupId', '==', id)
     );
+    const unsubSettlements = onSnapshot(settlementQuery, (snap) => {
+      setSettlements(
+        snap.docs.map((d) => ({ id: d.id, ...d.data() }) as SettlementRecord)
+      );
+    });
 
     return () => {
       unsubGroup();
       unsubExpenses();
-      unsubBalances();
+      unsubSettlements();
     };
   }, [id]);
 
@@ -94,6 +98,11 @@ export default function GroupDetail() {
     };
     fetchMembers();
   }, [group?.memberIds.join(',')]);
+
+  const balances = useMemo(
+    () => computeBalancesFromExpenses(expenses, settlements),
+    [expenses, settlements]
+  );
 
   if (loading || !group) {
     return (

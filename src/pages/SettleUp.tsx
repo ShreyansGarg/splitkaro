@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   doc,
   collection,
+  query,
+  where,
   addDoc,
   onSnapshot,
   getDoc,
@@ -10,15 +12,17 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/services/firebase';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Group, Balance } from '@/types';
+import type { Group, Expense, SettlementRecord } from '@/types';
 import { simplifyDebts } from '@/utils/debtSimplification';
+import { computeBalancesFromExpenses } from '@/utils/computeBalances';
 import { formatCurrency } from '@/utils/splits';
 
 export default function SettleUp() {
   const { id: groupId } = useParams<{ id: string }>();
   const { user } = useAuth();
   const [group, setGroup] = useState<Group | null>(null);
-  const [balances, setBalances] = useState<Balance[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [settlements, setSettlements] = useState<SettlementRecord[]>([]);
   const [settling, setSettling] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -31,19 +35,39 @@ export default function SettleUp() {
       }
     });
 
-    const unsubscribe = onSnapshot(
-      collection(db, `groups/${groupId}/balances`),
-      (snap) => {
-        setBalances(snap.docs.map((d) => d.data() as Balance));
-        setLoading(false);
-      }
+    const expenseQuery = query(
+      collection(db, 'expenses'),
+      where('groupId', '==', groupId)
     );
+    const unsubExpenses = onSnapshot(expenseQuery, (snap) => {
+      setExpenses(
+        snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Expense)
+      );
+      setLoading(false);
+    });
 
-    return unsubscribe;
+    const settlementQuery = query(
+      collection(db, 'settlements'),
+      where('groupId', '==', groupId)
+    );
+    const unsubSettlements = onSnapshot(settlementQuery, (snap) => {
+      setSettlements(
+        snap.docs.map((d) => ({ id: d.id, ...d.data() }) as SettlementRecord)
+      );
+    });
+
+    return () => {
+      unsubExpenses();
+      unsubSettlements();
+    };
   }, [groupId]);
 
-  const settlements = simplifyDebts(balances);
-  const mySettlements = settlements.filter(
+  const balances = useMemo(
+    () => computeBalancesFromExpenses(expenses, settlements),
+    [expenses, settlements]
+  );
+  const simplifiedSettlements = simplifyDebts(balances);
+  const mySettlements = simplifiedSettlements.filter(
     (s) => s.from === user?.uid || s.to === user?.uid
   );
 

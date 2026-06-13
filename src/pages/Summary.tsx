@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   collection,
@@ -10,9 +10,10 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/services/firebase';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Group, Balance, User } from '@/types';
+import type { Group, Expense, SettlementRecord, User } from '@/types';
 import { formatCurrency } from '@/utils/splits';
 import { simplifyDebts } from '@/utils/debtSimplification';
+import { computeBalancesFromExpenses } from '@/utils/computeBalances';
 
 interface DebtSummary {
   uid: string;
@@ -23,8 +24,11 @@ interface DebtSummary {
 export default function Summary() {
   const { user, signOut } = useAuth();
   const [groups, setGroups] = useState<Group[]>([]);
-  const [balancesByGroup, setBalancesByGroup] = useState<
-    Record<string, Balance[]>
+  const [expensesByGroup, setExpensesByGroup] = useState<
+    Record<string, Expense[]>
+  >({});
+  const [settlementsByGroup, setSettlementsByGroup] = useState<
+    Record<string, SettlementRecord[]>
   >({});
   const [users, setUsers] = useState<Record<string, User>>({});
   const [loading, setLoading] = useState(true);
@@ -57,16 +61,35 @@ export default function Summary() {
     for (const group of groups) {
       group.memberIds.forEach((uid) => allMemberIds.add(uid));
 
-      const unsub = onSnapshot(
-        collection(db, `groups/${group.id}/balances`),
-        (snap) => {
-          setBalancesByGroup((prev) => ({
-            ...prev,
-            [group.id]: snap.docs.map((d) => d.data() as Balance),
-          }));
-        }
+      const expenseQuery = query(
+        collection(db, 'expenses'),
+        where('groupId', '==', group.id)
       );
-      unsubs.push(unsub);
+      unsubs.push(
+        onSnapshot(expenseQuery, (snap) => {
+          setExpensesByGroup((prev) => ({
+            ...prev,
+            [group.id]: snap.docs.map(
+              (d) => ({ id: d.id, ...d.data() }) as Expense
+            ),
+          }));
+        })
+      );
+
+      const settlementQuery = query(
+        collection(db, 'settlements'),
+        where('groupId', '==', group.id)
+      );
+      unsubs.push(
+        onSnapshot(settlementQuery, (snap) => {
+          setSettlementsByGroup((prev) => ({
+            ...prev,
+            [group.id]: snap.docs.map(
+              (d) => ({ id: d.id, ...d.data() }) as SettlementRecord
+            ),
+          }));
+        })
+      );
     }
 
     const fetchUsers = async () => {
@@ -93,6 +116,17 @@ export default function Summary() {
       </div>
     );
   }
+
+  const balancesByGroup = useMemo(() => {
+    const result: Record<string, ReturnType<typeof computeBalancesFromExpenses>> = {};
+    for (const group of groups) {
+      result[group.id] = computeBalancesFromExpenses(
+        expensesByGroup[group.id] || [],
+        settlementsByGroup[group.id] || []
+      );
+    }
+    return result;
+  }, [groups, expensesByGroup, settlementsByGroup]);
 
   const youOwe: Record<string, DebtSummary> = {};
   const owedToYou: Record<string, DebtSummary> = {};
